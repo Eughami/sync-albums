@@ -3,13 +3,28 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "android": "react-native run-android",
-    "ios": "react-native run-ios",
-    "lint": "eslint .",
-    "start": "react-native start",
-    "test": "jest"
+    "local": "node local.mjs",
+    "setup": "node ./scripts/brand.setup.js && yarn",
+    "finalize": "yarn android:clean && yarn android:rm-builds && node ./scripts/finalize-build.js",
+    "android:clean": "cd android && rm -rf app/build && rm -rf build && ./gradlew clean && cd ..",
+    "android:clean-start": "yarn android:rm-builds && yarn android:clean && yarn android:install && yarn android:dev",
+    "android:install": "cd android && ./gradlew app:assembleDebug && ./gradlew installDebug",
+    "android:dev": "adb reverse tcp:8081 tcp:8081 && yarn start",
+    "android:reverse-port": " adb -s emulator-5556  reverse tcp:8080 tcp:8080",
+    "android:rm-builds": "find . -name \\*.apk -type f -delete && find . -name \\*.aab -type f -delete",
+    "android:build-debug": "yarn android:rm-builds && yarn android:clean &&  cd android && ./gradlew app:assembleDebug && cd ..",
+    "android:build-prod": "yarn android:rm-builds && yarn android:clean &&  cd android && ./gradlew app:assembleRelease && cd ..",
+    "android:build-prod-store": "yarn android:rm-builds && yarn android:clean &&  cd android && ./gradlew app:bundleRelease && cd ..",
+    "start": "echo 'Running <start> command with params: '; sleep 1; cat ./.env; sleep 1; echo; react-native start --reset-cache",
+    "stop": "fuser -n tcp -k 8081",
+    "test": "jest",
+    "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
+    "ios": "react-native run-ios"
   },
   "dependencies": {
+    "@react-native-async-storage/async-storage": "^1.21.0",
+    "@react-native-camera-roll/camera-roll": "^7.2.2",
+    "axios": "^1.6.2",
     "react": "18.2.0",
     "react-native": "0.73.1"
   },
@@ -27,6 +42,7 @@
     "eslint": "^8.19.0",
     "jest": "^29.6.3",
     "prettier": "2.8.8",
+    "react-native-dotenv": "^3.4.9",
     "react-test-renderer": "18.2.0",
     "typescript": "5.0.4"
   },
