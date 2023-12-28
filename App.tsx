@@ -171,7 +171,6 @@ function App(): React.JSX.Element {
           ...styles.sectionContainer,
           backgroundColor: isDarkMode ? Colors.black : Colors.white,
         }}>
-        <Text>URL: {BASE_URL}</Text>
         {uploading && <Text>{filename}</Text>}
         {error && <Text style={styles.error}>{JSON.stringify(error)}</Text>}
         <Button title="Sync" onPress={listAlbums} />
