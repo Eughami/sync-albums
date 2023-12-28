@@ -136,8 +136,7 @@ function App(): React.JSX.Element {
           });
           await axios({
             method: 'post',
-            url: 'https://sync.eughami.com/upload',
-            // url: 'http://20.0.30.191:8000/upload',
+            url: `${BASE_URL}/upload`,
             data: formdata,
             headers: {
               Accept: 'application/json',
