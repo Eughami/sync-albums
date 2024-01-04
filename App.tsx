@@ -1,7 +1,8 @@
-import React from 'react';
+import React, {useEffect} from 'react';
 import {
   Button,
   SafeAreaView,
+  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
@@ -15,6 +16,8 @@ import {PermissionsAndroid, Platform} from 'react-native';
 import {CameraRoll} from '@react-native-camera-roll/camera-roll';
 import axios from 'axios';
 import {BASE_URL} from '@env';
+import Preview from './Preview';
+import BouncyCheckbox from 'react-native-bouncy-checkbox';
 
 async function hasAndroidPermission() {
   const getCheckPermissionPromise = () => {
@@ -63,7 +66,14 @@ async function hasAndroidPermission() {
   return await getRequestPermissionPromise();
 }
 
+type Grid = {
+  title: string;
+  uri: string;
+};
 function App(): React.JSX.Element {
+  const [useLastTimestamp, setUseLastTimestamp] = React.useState(false);
+  const [gridData, setGridData] = React.useState<Grid[]>([]);
+  const [albums, setAlbums] = React.useState<string[]>([]);
   const [filename, setFilename] = React.useState('');
   const [uploading, setUploading] = React.useState(false);
   const [error, setError] = React.useState(null);
@@ -73,55 +83,74 @@ function App(): React.JSX.Element {
     backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
   };
 
+  /**
+   ** Add a new method that shows all albums with the latest media
+   ** as thumbnails and ability to select which one to sync
+   ** Adjustable time range (or no time at all)
+   ** Add splash screen and icon
+   */
+
+  async function showAlbums() {
+    if (Platform.OS === 'android' && !(await hasAndroidPermission())) {
+      return;
+    }
+
+    const ll: Grid[] = [];
+    const list = await CameraRoll.getAlbums({
+      assetType: 'All',
+      albumType: 'All',
+    });
+    for (const item of list) {
+      const content = await CameraRoll.getPhotos({
+        first: 1,
+        groupTypes: 'Album',
+        groupName: item.title,
+      });
+      ll.push({
+        title: item.title,
+        uri: content.edges[0].node.image.uri,
+      });
+    }
+    setGridData(ll);
+  }
+
+  function updateAlbums(item: string, isSelected: boolean) {
+    if (isSelected) {
+      setAlbums([...albums, item]);
+    } else {
+      setAlbums(albums.filter(album => album !== item));
+    }
+  }
+
+  useEffect(() => {
+    // AsyncStorage.setItem('timestamp', '1704152568492');
+    console.log('albums updated', albums);
+  }, [albums]);
+
+  useEffect(() => {
+    showAlbums();
+  }, []);
+
   async function listAlbums() {
     if (Platform.OS === 'android' && !(await hasAndroidPermission())) {
       return;
     }
     let err = null;
     setUploading(true);
-    const albums = await CameraRoll.getAlbums({
-      assetType: 'All',
-      albumType: 'All',
-    });
 
-    let albumsNames = albums.map(album => album.title);
     let lastTime = await AsyncStorage.getItem('timestamp');
     console.log(lastTime);
     if (!lastTime) {
-      lastTime = '1703196000000'; // December 22, 2023 00:00:00  GMT+02:00
+      lastTime = '1704152568492'; // Tuesday, January 2, 2024 1:42:48.492 AM GMT+02:00
     }
-    albumsNames = albumsNames.filter(name =>
-      [
-        'Twitter',
-        'Pictures',
-        'PS App',
-        // 'Screenshots',
-        // 'WhatsApp Video',
-        // 'WhatsApp Images',
-        'Exercices',
-        'Messenger',
-        // 'WhatsApp Animated Gifs',
-        'Snapchat',
-        'Instander',
-        // 'twitter',
-        'Reddit',
-        // 'WhatsApp Documents',
-        'Camera',
-        'Download',
-        'God of War',
-        'Massages',
-        'Food',
-      ].includes(name),
-    );
-
-    for (const name of albumsNames) {
+    for (const name of albums) {
       const content = await CameraRoll.getPhotos({
         first: 100,
         groupTypes: 'Album',
         groupName: name,
         // fromTime: 1703548800000,
         // fromTime: Date.now() - 5 * 60 * 60 * 1000,
-        fromTime: parseInt(lastTime, 10),
+        fromTime: useLastTimestamp ? parseInt(lastTime, 10) : undefined,
       });
       if (content.edges.length > 0) {
         for (const image of content.edges) {
@@ -152,7 +181,7 @@ function App(): React.JSX.Element {
       }
     }
     setError(err);
-    if (!err) {
+    if (!err && useLastTimestamp) {
       await AsyncStorage.setItem('timestamp', Date.now().toString());
     }
     setUploading(false);
@@ -165,16 +194,33 @@ function App(): React.JSX.Element {
         barStyle={isDarkMode ? 'light-content' : 'dark-content'}
         backgroundColor={backgroundStyle.backgroundColor}
       />
-
-      <View
-        style={{
-          ...styles.sectionContainer,
-          backgroundColor: isDarkMode ? Colors.black : Colors.white,
-        }}>
-        {uploading && <Text>{filename}</Text>}
-        {error && <Text style={styles.error}>{JSON.stringify(error)}</Text>}
-        <Button title="Sync" onPress={listAlbums} />
-      </View>
+      <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
+        style={backgroundStyle}>
+        <View
+          style={{
+            ...styles.sectionContainer,
+            backgroundColor: isDarkMode ? Colors.black : Colors.white,
+          }}>
+          {error && <Text style={styles.error}>{JSON.stringify(error)}</Text>}
+          <View style={{flexDirection: 'row', flexWrap: 'wrap'}}>
+            {gridData.map((grid, index) => (
+              <View key={index} style={{width: '50%'}}>
+                <Preview {...grid} updateFunc={updateAlbums} />
+              </View>
+            ))}
+          </View>
+          <BouncyCheckbox
+            style={{margin: 10}}
+            text="Use Last timestamp"
+            textStyle={{color: 'black', textDecorationLine: 'none'}}
+            onPress={(isChecked: boolean) => setUseLastTimestamp(isChecked)}
+          />
+          {/* <Button title="Show" onPress={showAlbums} /> */}
+          {uploading && <Text>{filename}</Text>}
+          <Button title="Sync" onPress={listAlbums} />
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -183,7 +229,7 @@ const styles = StyleSheet.create({
   sectionContainer: {
     height: '100%',
     justifyContent: 'center',
-    padding: 24,
+    padding: 8,
   },
   error: {
     color: 'red',
