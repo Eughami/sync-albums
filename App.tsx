@@ -17,6 +17,7 @@ import {CameraRoll} from '@react-native-camera-roll/camera-roll';
 import axios from 'axios';
 import Preview from './Preview';
 import BouncyCheckbox from 'react-native-bouncy-checkbox';
+import DatePicker from 'react-native-date-picker';
 
 async function hasAndroidPermission() {
   const getCheckPermissionPromise = () => {
@@ -70,13 +71,14 @@ type Grid = {
   uri: string;
 };
 function App(): React.JSX.Element {
-  const [useLastTimestamp, setUseLastTimestamp] = React.useState(true);
   const [gridData, setGridData] = React.useState<Grid[]>([]);
   const [albums, setAlbums] = React.useState<string[]>([]);
   const [filename, setFilename] = React.useState('');
   const [uploading, setUploading] = React.useState(false);
   const [error, setError] = React.useState(null);
   const isDarkMode = useColorScheme() === 'dark';
+  const [date, setDate] = React.useState(new Date());
+  const [open, setOpen] = React.useState(false);
 
   const backgroundStyle = {
     backgroundColor: isDarkMode ? Colors.lighter : Colors.lighter,
@@ -128,7 +130,11 @@ function App(): React.JSX.Element {
   }, [albums]);
 
   useEffect(() => {
-    AsyncStorage.getItem('timestamp').then(c => console.log({c}));
+    AsyncStorage.getItem('timestamp').then(c => {
+      if (c) {
+        setDate(new Date(parseInt(c, 10)));
+      }
+    });
     // AsyncStorage.removeItem('timestamp');
     showAlbums();
   }, []);
@@ -142,17 +148,13 @@ function App(): React.JSX.Element {
 
     let lastTime = await AsyncStorage.getItem('timestamp');
     console.log({lastTime});
-    if (!lastTime) {
-      lastTime = '1749589200000'; // Saturday, December 7, 2024 3:00:57 AM GMT+03:00
-    }
+
     for (const name of albums) {
       const content = await CameraRoll.getPhotos({
         first: 500,
         groupTypes: 'Album',
         groupName: name,
-        fromTime: 1749589200000, // Wednesday, June 11, 2025 12:00:00 AM GMT+03:00
-        // fromTime: Date.now() - 5 * 60 * 60 * 1000,
-        // fromTime: useLastTimestamp ? parseInt(lastTime, 10) : undefined,
+        fromTime: date.getTime(),
       });
       console.log('found ' + content.edges.length + ' items in ' + name);
       if (content.edges.length > 0) {
@@ -197,8 +199,8 @@ function App(): React.JSX.Element {
       }
     }
     setError(err);
-    if (!err && useLastTimestamp) {
-      await AsyncStorage.setItem('timestamp', Date.now().toString());
+    if (!err) {
+      await AsyncStorage.setItem('timestamp', date.getTime().toString());
     }
     setUploading(false);
     setFilename('');
@@ -218,6 +220,31 @@ function App(): React.JSX.Element {
             ...styles.sectionContainer,
             // backgroundColor: isDarkMode ? Colors.black : Colors.white,
           }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              width: 150,
+              justifyContent: 'space-between',
+            }}>
+            <Button title="Change date" onPress={() => setOpen(true)} />
+            <Text style={{marginLeft: 10}}>
+              {date.toLocaleDateString('en-GB')}
+            </Text>
+          </View>
+          <DatePicker
+            modal
+            open={open}
+            date={date}
+            onConfirm={date => {
+              setOpen(false);
+              setDate(date);
+            }}
+            onCancel={() => {
+              setOpen(false);
+            }}
+            mode="date"
+          />
           <BouncyCheckbox
             style={{margin: 10}}
             text="Select All"
@@ -238,13 +265,7 @@ function App(): React.JSX.Element {
               </View>
             ))}
           </View>
-          <BouncyCheckbox
-            style={{margin: 10}}
-            text="Use Last timestamp"
-            isChecked={useLastTimestamp}
-            textStyle={{color: 'black', textDecorationLine: 'none'}}
-            onPress={(isChecked: boolean) => setUseLastTimestamp(isChecked)}
-          />
+
           {/* <Button title="Show" onPress={showAlbums} /> */}
           {uploading && <Text>{filename}</Text>}
           <Button title="Sync" onPress={listAlbums} />
