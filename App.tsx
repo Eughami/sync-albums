@@ -15,7 +15,6 @@ import {Colors} from 'react-native/Libraries/NewAppScreen';
 import {PermissionsAndroid, Platform} from 'react-native';
 import {CameraRoll} from '@react-native-camera-roll/camera-roll';
 import axios from 'axios';
-import {BASE_URL} from '@env';
 import Preview from './Preview';
 import BouncyCheckbox from 'react-native-bouncy-checkbox';
 
@@ -71,7 +70,7 @@ type Grid = {
   uri: string;
 };
 function App(): React.JSX.Element {
-  const [useLastTimestamp, setUseLastTimestamp] = React.useState(false);
+  const [useLastTimestamp, setUseLastTimestamp] = React.useState(true);
   const [gridData, setGridData] = React.useState<Grid[]>([]);
   const [albums, setAlbums] = React.useState<string[]>([]);
   const [filename, setFilename] = React.useState('');
@@ -80,7 +79,7 @@ function App(): React.JSX.Element {
   const isDarkMode = useColorScheme() === 'dark';
 
   const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
+    backgroundColor: isDarkMode ? Colors.lighter : Colors.lighter,
   };
 
   /**
@@ -111,11 +110,13 @@ function App(): React.JSX.Element {
         uri: content.edges[0].node.image.uri,
       });
     }
-    setGridData(ll);
+    setGridData(ll.filter(item => !item.title.includes('WhatsApp')));
   }
 
   function updateAlbums(item: string, isSelected: boolean) {
     if (isSelected) {
+      const found = albums.find(album => album === item);
+      if (found) return;
       setAlbums([...albums, item]);
     } else {
       setAlbums(albums.filter(album => album !== item));
@@ -123,11 +124,12 @@ function App(): React.JSX.Element {
   }
 
   useEffect(() => {
-    // AsyncStorage.setItem('timestamp', '1704152568492');
     console.log('albums updated', albums);
   }, [albums]);
 
   useEffect(() => {
+    AsyncStorage.getItem('timestamp').then(c => console.log({c}));
+    // AsyncStorage.removeItem('timestamp');
     showAlbums();
   }, []);
 
@@ -139,20 +141,22 @@ function App(): React.JSX.Element {
     setUploading(true);
 
     let lastTime = await AsyncStorage.getItem('timestamp');
-    console.log(lastTime);
+    console.log({lastTime});
     if (!lastTime) {
-      lastTime = '1704152568492'; // Tuesday, January 2, 2024 1:42:48.492 AM GMT+02:00
+      lastTime = '1749589200000'; // Saturday, December 7, 2024 3:00:57 AM GMT+03:00
     }
     for (const name of albums) {
       const content = await CameraRoll.getPhotos({
-        first: 100,
+        first: 500,
         groupTypes: 'Album',
         groupName: name,
-        // fromTime: 1703548800000,
+        fromTime: 1749589200000, // Wednesday, June 11, 2025 12:00:00 AM GMT+03:00
         // fromTime: Date.now() - 5 * 60 * 60 * 1000,
-        fromTime: useLastTimestamp ? parseInt(lastTime, 10) : undefined,
+        // fromTime: useLastTimestamp ? parseInt(lastTime, 10) : undefined,
       });
+      console.log('found ' + content.edges.length + ' items in ' + name);
       if (content.edges.length > 0) {
+        let curent = 0;
         for (const image of content.edges) {
           const formdata = new FormData();
           setFilename(image.node.image.uri.split('/').pop() ?? '');
@@ -163,20 +167,32 @@ function App(): React.JSX.Element {
             type: image.node.type,
             uri: image.node.image.uri,
           });
-          await axios({
-            method: 'post',
-            url: `${BASE_URL}/upload`,
-            data: formdata,
-            headers: {
-              Accept: 'application/json',
-              'Content-Type': 'multipart/form-data',
-            },
-          })
-            .then(res => console.log(res.data))
-            .catch(e => {
-              err = e.message;
-              console.log(e?.response?.data);
+          try {
+            console.log(
+              `${curent + 1}/${
+                content.edges.length
+              } uploading... ${image.node.image.uri.split('/').pop()}`,
+            );
+            await axios({
+              method: 'post',
+              url: 'http://192.168.1.12:8000/upload',
+              data: formdata,
+              headers: {
+                Accept: 'application/json',
+                'Content-Type': 'multipart/form-data',
+              },
             });
+            console.log(
+              `Succesfully uploaded ${image.node.image.uri.split('/').pop()}`,
+            );
+          } catch (error: any) {
+            console.log(
+              'something went wrong ',
+              error?.response?.data || error,
+            );
+          }
+          // await new Promise(resolve => setTimeout(resolve, 1000));
+          curent++;
         }
       }
     }
@@ -192,7 +208,7 @@ function App(): React.JSX.Element {
     <SafeAreaView style={backgroundStyle}>
       <StatusBar
         barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={backgroundStyle.backgroundColor}
+        // backgroundColor={backgroundStyle.backgroundColor}
       />
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
@@ -200,8 +216,20 @@ function App(): React.JSX.Element {
         <View
           style={{
             ...styles.sectionContainer,
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
+            // backgroundColor: isDarkMode ? Colors.black : Colors.white,
           }}>
+          <BouncyCheckbox
+            style={{margin: 10}}
+            text="Select All"
+            textStyle={{color: 'black', textDecorationLine: 'none'}}
+            onPress={(isChecked: boolean) => {
+              if (isChecked) {
+                setAlbums(gridData.map(item => item.title));
+              } else {
+                setAlbums([]);
+              }
+            }}
+          />
           {error && <Text style={styles.error}>{JSON.stringify(error)}</Text>}
           <View style={{flexDirection: 'row', flexWrap: 'wrap'}}>
             {gridData.map((grid, index) => (
@@ -213,6 +241,7 @@ function App(): React.JSX.Element {
           <BouncyCheckbox
             style={{margin: 10}}
             text="Use Last timestamp"
+            isChecked={useLastTimestamp}
             textStyle={{color: 'black', textDecorationLine: 'none'}}
             onPress={(isChecked: boolean) => setUseLastTimestamp(isChecked)}
           />
